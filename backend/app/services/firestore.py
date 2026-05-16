@@ -9,6 +9,7 @@ import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1 import AsyncClient
+from google.oauth2 import service_account
 from app.config import settings
 
 
@@ -45,8 +46,21 @@ def get_firestore_client() -> AsyncClient:
         return _db
 
     _init_firebase()
-    _db = AsyncClient(
-        project=settings.google_cloud_project,
-        database=settings.firestore_database,
-    )
+
+    cred_path = settings.google_application_credentials
+    if os.path.isfile(cred_path):
+        # Pass credentials explicitly so AsyncClient doesn't rely on ADC
+        creds = service_account.Credentials.from_service_account_file(cred_path)
+        _db = AsyncClient(
+            project=settings.google_cloud_project,
+            database=settings.firestore_database,
+            credentials=creds,
+        )
+    else:
+        # On Cloud Run, ADC works automatically
+        _db = AsyncClient(
+            project=settings.google_cloud_project,
+            database=settings.firestore_database,
+        )
     return _db
+

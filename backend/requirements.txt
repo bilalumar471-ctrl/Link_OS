@@ -5,6 +5,6 @@ pydantic-settings
 firebase-admin
 google-cloud-firestore
 google-cloud-aiplatform
-google-generativeai
+google-genai
 numpy
 python-dotenv

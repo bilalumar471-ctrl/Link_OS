@@ -1,19 +1,20 @@
 """
-Gemini 2.0 Flash Service Wrapper.
+Gemini 2.5 Flash Service Wrapper.
 
-Configures the google.generativeai SDK and provides an async helper
-to generate structured JSON responses using Pydantic schemas.
+Uses the `google.genai` SDK to generate structured JSON responses
+using Pydantic schemas.
 """
 
-import google.generativeai as genai
-from typing import Type, Any, Optional, Dict
+from google import genai
+from google.genai import types
+from typing import Type, Any, Optional
 from pydantic import BaseModel
 
 from app.config import settings
 
 
-# Configure the SDK once
-genai.configure(api_key=settings.gemini_api_key)
+# Initialize the client once
+client = genai.Client(api_key=settings.gemini_api_key)
 
 
 async def generate_structured_json(
@@ -26,24 +27,19 @@ async def generate_structured_json(
     Calls Gemini 2.0 Flash and forces the output to match the provided Pydantic schema.
     Returns a parsed instance of the Pydantic schema.
     """
-    # In newer google-generativeai SDK versions, you can pass Pydantic models directly 
-    # to the `response_schema` generation config field.
-    model = genai.GenerativeModel(
-        model_name=settings.gemini_model,
-        system_instruction=system_instruction
-    )
-    
-    config = genai.GenerationConfig(
+    config = types.GenerateContentConfig(
         response_mime_type="application/json",
         response_schema=schema,
         temperature=temperature,
         max_output_tokens=settings.gemini_max_tokens,
+        system_instruction=system_instruction,
     )
-    
-    response = await model.generate_content_async(
+
+    response = await client.aio.models.generate_content(
+        model=settings.gemini_model,
         contents=prompt,
-        generation_config=config,
+        config=config,
     )
-    
+
     # Parse the returned JSON text directly into the requested schema
     return schema.model_validate_json(response.text)

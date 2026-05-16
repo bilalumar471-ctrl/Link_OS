@@ -18,15 +18,19 @@ trajectory_agent = TrajectoryPredictorAgent()
 @router.get("/")
 async def get_linkages(
     status: Optional[str] = Query(None),
-    type: Optional[str] = Query(None)
+    type: Optional[str] = Query(None),
+    trajectory: Optional[str] = Query(None, description="Filter by trajectory status: improving | stable | declining | critical"),
 ):
-    """Fetch linkages with optional filtering."""
+    """Fetch linkages with optional filtering by status, type, and trajectory."""
     filters = {}
     if status:
         filters["status"] = status
     if type:
         filters["type"] = type
-        
+    if trajectory:
+        # Firestore supports dot-notation for nested field equality filters
+        filters["trajectory.status"] = trajectory
+
     return await dal.list_linkages(filters=filters)
 
 
@@ -74,10 +78,10 @@ async def confirm_linkage(linkage_id: str):
 
 
 @router.post("/{linkage_id}/close")
-async def close_linkage(linkage_id: str, background_tasks: BackgroundTasks, outcome: str = "completed"):
+async def close_linkage(linkage_id: str, background_tasks: BackgroundTasks, outcome: str = "completed", final_rating: float = 5.0):
     """
     Closes a linkage. 
-    If dropped, triggers post-mortem.
+    Post-mortem triggers on: dropped, reassigned, or completed with rating < 3.
     Always triggers cross-cohort evolution engine.
     """
     linkage = await dal.get_linkage(linkage_id)
@@ -86,7 +90,13 @@ async def close_linkage(linkage_id: str, background_tasks: BackgroundTasks, outc
         
     await dal.update_linkage(linkage_id, {"status": outcome})
     
-    if outcome in ["dropped", "reassigned"]:
+    # Post-mortem trigger conditions (PRD v1.2.0 §3.2):
+    # 1. dropped  2. reassigned  3. completed with final rating < 3
+    should_post_mortem = (
+        outcome in ["dropped", "reassigned"] or
+        (outcome == "completed" and final_rating < 3.0)
+    )
+    if should_post_mortem:
         background_tasks.add_task(pm_engine.analyze, linkage_id)
         
     background_tasks.add_task(evolution_engine.forecast, linkage_id)

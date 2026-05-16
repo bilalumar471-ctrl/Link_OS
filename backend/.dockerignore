@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environment (never bake into the image)
+venv/
+.venv/
+env/
+.env.local
+.env.test
+
+# NOTE: .env is excluded — secrets are injected as Cloud Run env vars at runtime
+.env
+
+# Dev/IDE artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Docs (not needed in container)
+*.md

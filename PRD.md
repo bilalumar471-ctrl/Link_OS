@@ -1,9 +1,17 @@
 # LinkOS — Product Requirements Document (PRD)
-**Version:** 1.1.0  
-**Hackathon:** Build With AI 2026 KL – MyHack  
-**Date:** 16–17 May 2026  
-**Platform:** Google Antigravity  
+**Version:** 1.2.0
+**Hackathon:** Build With AI 2026 KL – MyHack
+**Date:** 16–17 May 2026
+**Platform:** Google Antigravity
 **Team:** [Your Team Name]
+
+---
+
+## Changelog — v1.2.0
+- FIX 1: Standardised Gemini model to `gemini-2.5-flash` throughout
+- FIX 3: F9 (Self-Reflection) expanded with full spec; F10 (Risk Agent) remains F10; F11/F12 unchanged
+- FIX 5: Post-mortem lifecycle diagram corrected — trigger now includes COMPLETED (rating < 3) and REASSIGNED, not only DROPPED
+- FIX 6: Auth mechanism specified — Firebase Authentication with Google Sign-In
 
 ---
 
@@ -13,7 +21,7 @@ LinkOS is a multi-agent AI platform that automates ecosystem relationship manage
 
 Built for Cradle and similar innovation ecosystem operators, LinkOS treats relationships as first-class, programmable entities that can be created, stored, reused, governed, and improved automatically across programmes, cohorts, countries, and geographies.
 
-LinkOS now includes a **Relationship Trajectory Predictor** — a mid-engagement AI agent that forecasts where every active relationship is heading before it fails, and a **Cross-Cohort Evolution Engine** that predicts how mentor-company fit will change across future programme cycles. Together these close the gap between retrospective learning and genuine forward-looking intelligence.
+LinkOS includes a **Relationship Trajectory Predictor** — a mid-engagement AI agent that forecasts where every active relationship is heading before it fails, and a **Cross-Cohort Evolution Engine** that predicts how mentor-company fit will change across future programme cycles. Together these close the gap between retrospective learning and genuine forward-looking intelligence.
 
 ---
 
@@ -58,10 +66,11 @@ LinkOS introduces a **Multi-Agent Ecosystem Linkage Platform** where:
 2. Agents maintain **persistent long-term memory** of every engagement — successes, failures, patterns, lessons
 3. An **Orchestrator Agent** coordinates inter-agent communication and negotiation
 4. Relationships are stored as **Linkage Entities** in Firestore — structured, reusable, versioned records
-5. A **post-mortem engine** analyses failed engagements and writes specific lessons back to the relevant agents
+5. A **post-mortem engine** analyses failed or poor engagements and writes specific lessons back to the relevant agents
 6. A **Trajectory Predictor Agent** monitors every active engagement mid-cycle and forecasts its outcome before failure occurs
 7. A **Cross-Cohort Evolution Engine** predicts how mentor-company fit will shift across future programme cycles
-8. The system **learns and improves** with every completed programme cycle
+8. A **System-Level Self-Reflection Engine** evaluates the platform's own matching accuracy after every programme cycle and adjusts future scoring weights
+9. The system **learns and improves** with every completed programme cycle
 
 ### 3.1 The Agent Architecture
 
@@ -75,12 +84,13 @@ ORCHESTRATOR AGENT
   ├── collects agent responses
   ├── ranks and creates Linkage Entities
   ├── runs post-mortems after engagements close
-  └── triggers Trajectory Predictor after each session log
+  ├── triggers Trajectory Predictor after each session log
+  └── triggers Self-Reflection Engine after programme cycle closes
        │
-  ┌────┴──────────────────────────────────────────────┐
-  │         │           │          │          │        │
-MENTOR   COMPANY   PROGRAMME   PARTNER   TRAJECTORY  RISK
-AGENT    AGENT     AGENT       AGENT     PREDICTOR   AGENT
+  ┌────┴────────────────────────────────────────────────────────┐
+  │         │           │          │          │        │         │
+MENTOR   COMPANY   PROGRAMME   PARTNER   TRAJECTORY  RISK  SELF-REFLECT
+AGENT    AGENT     AGENT       AGENT     PREDICTOR   AGENT   ENGINE
   │         │           │          │          │
 reads     reads       reads      reads    reads session
 own       own         criteria   own      history →
@@ -92,14 +102,26 @@ Firestore Firestore              Firestore trajectory
 ### 3.2 Linkage Entity Lifecycle
 
 ```
-PROPOSED → ACTIVE → [SESSION LOGS] → COMPLETED
+PROPOSED → ACTIVE → [SESSION LOGS] → COMPLETED (rating ≥ 3)
                │           │
                │     TRAJECTORY PREDICTOR runs after each session
                │     → writes predicted_outcome, drop_probability,
                │       trajectory, recommended_action to linkage
                │
-               └──→ DROPPED → POST-MORTEM → LESSONS WRITTEN BACK
+               ├──→ COMPLETED (rating < 3) ─┐
+               │                            ├──→ POST-MORTEM
+               └──→ DROPPED ────────────────┤   → LESSONS WRITTEN
+                                            │     BACK TO ALL
+               └──→ REASSIGNED ────────────-┘     AFFECTED ACTORS
+                     ↓
+               NEW PROPOSED linkage created
+               with prior context attached
 ```
+
+**Post-mortem trigger conditions (all three):**
+- Engagement outcome = `dropped`
+- Engagement outcome = `reassigned`
+- Engagement outcome = `completed` AND final rating < 3
 
 ---
 
@@ -146,7 +168,7 @@ Every actor entity in Firestore maintains three data layers:
 **Priority:** P0 (Must have)
 
 When an engagement ends with outcome `dropped`, `reassigned`, or rating < 3:
-- Orchestrator triggers a post-mortem Gemini call
+- Orchestrator triggers a post-mortem Gemini 2.5 Flash call
 - Gemini analyses the mentor profile snapshot, company profile snapshot, ratings, and notes
 - Returns structured JSON: `{ failure_tags, avoid_pairing_with, lesson }`
 - Lessons written back to mentor's `performance.failure_patterns` and `performance.weakness_tags`
@@ -173,7 +195,7 @@ A real-time streaming panel in the UI that shows:
 - Inter-agent messages (what Programme Agent requested, how Mentor Agent responded)
 - Final Orchestrator decision with ranking
 
-Powered by Gemini streaming responses. This is the primary demo differentiator — judges watch agents negotiating in real time.
+Powered by Gemini 2.5 Flash streaming responses via Server-Sent Events (SSE). This is the primary demo differentiator — judges watch agents negotiating in real time.
 
 #### F6 — Natural Language Admin Interface
 **Priority:** P1 (Should have)
@@ -204,28 +226,49 @@ When a new programme is created:
 - Admin can accept suggestions directly without running full matching again
 - Reuse rate becomes a platform KPI
 
-#### F9 — Self-Reflection Engine
-**Priority:** P2 (Nice to have)
+#### F9 — System-Level Self-Reflection Engine
+**Priority:** P1 (Should have)
 
-After every completed programme cycle:
-- Orchestrator Agent reviews its own matching decisions
-- Compares predicted fit scores to actual outcomes
-- Identifies systematic biases (e.g. over-weighting domain match vs. stage match)
-- Adjusts scoring weights for future matching cycles
-- Logs reflection output to `/system/self_reflection/{cycle_id}`
+After every programme cycle closes, the Orchestrator triggers a system-level self-reflection cycle that evaluates the performance of the matching engine itself — not individual actors.
+
+**When it runs:**
+Automatically triggered when a programme's final linkage moves to `completed` or `dropped` and the programme cycle is marked closed.
+
+**What it analyses:**
+- Predicted fit scores at match time vs actual final ratings
+- Which agent proposals the admin overrode (and whether the override led to better or worse outcomes)
+- Whether any sector, stage, or demographic was systematically scored lower than outcome data justifies (bias detection)
+- Which failure patterns correctly predicted dropout vs which were false positives
+
+**Output written to Firestore `/system/self_reflection/{cycle_id}`:**
+```json
+{
+  "programme_id": "ref",
+  "predicted_scores": { "linkage_id": "predicted_score" },
+  "actual_outcomes": { "linkage_id": "final_rating" },
+  "prediction_accuracy": 0.82,
+  "bias_observations": ["Fintech companies systematically scored 8pts lower than outcomes justify"],
+  "weight_adjustments": { "fintech_domain": 0.05, "pre_seed_stage": -0.03 },
+  "reflection_summary": "string",
+  "reflection_at": "timestamp"
+}
+```
+
+**How it improves future matching:**
+The `weight_adjustments` output is read by the Orchestrator Agent at the start of every new matching cycle. Domains that were systematically under-scored get a positive weight adjustment; over-confident predictions get a confidence penalty applied to similar future match types.
+
+**Ethical safeguard:**
+Bias observations are surfaced in the Analytics page. If the same sector or stage appears in `bias_observations` for 2+ consecutive cycles, a warning banner appears in the admin dashboard.
 
 #### F10 — Risk Agent
-**Priority:** P2 (Nice to have)
+**Priority:** P1 (Should have)
 
 A dedicated risk analysis agent that:
 - Evaluates every proposed linkage before it goes to admin review
 - Checks for known failure patterns, conflict-of-interest flags, overloaded mentors
 - Returns a risk report alongside the match proposal
 - Admin sees: Match Score + Risk Score together
-
----
-
-### 4.2 New Features — Predictive Intelligence Layer
+- If risk level is HIGH, match is flagged for mandatory admin review before activation
 
 #### F11 — Relationship Trajectory Predictor
 **Priority:** P0 (Must have for demo)
@@ -233,10 +276,9 @@ A dedicated risk analysis agent that:
 The system predicts where every active engagement is heading — before it fails. This closes the gap between retrospective learning (post-mortem) and forward-looking intelligence (prediction).
 
 **How it works:**
+After every session is logged by the admin, the Orchestrator automatically triggers a Trajectory Predictor Gemini 2.5 Flash call. The agent analyses the trend across all sessions completed so far and outputs a structured forecast.
 
-After every session is logged by the admin, the Orchestrator automatically triggers a Trajectory Predictor Gemini call. The agent analyses the trend across all sessions completed so far and outputs a structured forecast.
-
-**Session Log Subcollection (new Firestore addition):**
+**Session Log Subcollection (Firestore):**
 ```
 /linkages/{linkage_id}
   └── /sessions/{session_id}
@@ -294,7 +336,7 @@ After every session is logged by the admin, the Orchestrator automatically trigg
 #### F12 — Cross-Cohort Evolution Engine
 **Priority:** P1 (Should have)
 
-Predicts how a mentor-company relationship's fit will change across future programme cohorts — not just within the current engagement. This answers the question: "Will this pairing still make sense in Cohort 4?"
+Predicts how a mentor-company relationship's fit will change across future programme cohorts — not just within the current engagement.
 
 **When it runs:** Automatically triggered by the Orchestrator when a programme cycle closes and a linkage moves to `completed`.
 
@@ -317,14 +359,6 @@ Predicts how a mentor-company relationship's fit will change across future progr
         forecast_reason: string,
         recommended_action: string
       }
-```
-
-**Example output:**
-```
-"Company B is scaling faster than Mentor A's typical domain.
-By Cohort 4, fit score is predicted to fall below 60 as the company
-moves toward Series B where Mentor A has no track record.
-Recommend introducing a Series B specialist as co-mentor in Cohort 3."
 ```
 
 ---
@@ -371,10 +405,17 @@ Recommend introducing a Series B specialist as co-mentor in Cohort 3."
 - Human confirmation required before any linkage moves from `proposed` to `active`
 - All AI decisions include reasoning — no opaque scores
 - Trajectory predictions include confidence indicators and explicit reasoning — never a bare probability
-- Bias monitoring: system flags if the same demographic or sector is systematically scored lower
+- Bias monitoring: Self-Reflection Engine (F9) flags if the same demographic or sector is systematically scored lower
+- Bias warnings surfaced in Analytics dashboard after 2+ consecutive flagged cycles
 - Data privacy: mentor and company profiles are not shared with each other's agents directly — only through the Orchestrator
 
-### 6.4 Scalability
+### 6.4 Authentication
+- **Method:** Firebase Authentication — Google Sign-In (OAuth 2.0)
+- All routes except `/login` are protected via a `<ProtectedRoute>` component
+- Unauthenticated users are redirected to `/login`
+- Demo: pre-authenticate with team Google account before presentation; Firebase auth state persists across browser sessions
+
+### 6.5 Scalability
 - Firestore horizontal scaling — no schema changes required to add a new region or programme type
 - Agent architecture is stateless — new entity types (e.g. investors) can be added by defining a new agent system prompt and Firestore collection
 - Cloud Run auto-scales FastAPI backend with zero configuration changes
@@ -403,7 +444,7 @@ Recommend introducing a Series B specialist as co-mentor in Cohort 3."
 - Real-time video/chat between mentors and companies
 - Financial transaction management
 - Integration with existing Cradle databases (demo uses seeded data)
-- Full OAuth login system (demo uses simple auth)
+- Full multi-tenant role management (demo uses single admin Google account)
 
 ---
 
@@ -412,10 +453,11 @@ Recommend introducing a Series B specialist as co-mentor in Cohort 3."
 - Firestore is pre-seeded with 6 mentors, 4 companies, 2 programmes before demo
 - At least 2 active linkages are pre-seeded with session logs (3 sessions each) to demonstrate the Trajectory Predictor live
 - One pre-seeded linkage must have a declining trajectory (ratings falling, increasing response time) for demo impact
-- Gemini API keys provisioned under Google Antigravity project
+- Gemini 2.5 Flash API keys provisioned under Google Antigravity project
 - Vertex AI Embeddings API enabled on the same project
 - Cloud Run deployment completed by hour 16 of the hackathon
 - Demo is run live — replay mode is available as fallback
+- Firebase Authentication configured with Google Sign-In for demo login
 
 ---
 
@@ -423,12 +465,12 @@ Recommend introducing a Series B specialist as co-mentor in Cohort 3."
 
 | Criteria | Points | How LinkOS Scores |
 |---|---|---|
-| Google Technology Integration | 15 | Vertex AI embeddings for semantic matching + Gemini function calling for agents + Gemini streaming for Trajectory Predictor + Firestore as entity store + Cloud Run deployment |
-| AI Implementation Quality | 10 | Multi-agent architecture, explainable decisions, human confirmation gate, post-mortem learning, trajectory prediction with confidence indicators, hallucination mitigation via structured JSON outputs |
-| Working Demo & UI/UX | 10 | Live reasoning log, trajectory indicator on linkages table, pre-seeded data, replay mode fallback, hosted on Cloud Run |
-| AI Model Performance | 5 | History-aware scoring, embedding similarity, performance-weighted match ranking, mid-engagement trajectory forecasting |
-| Originality & Creativity | 10 | Multi-agent negotiation architecture + predictive relationship trajectory — unique combination in this problem space |
-| Problem-Solution Fit | 15 | Directly solves Cradle's exact stated problem: ad-hoc relations, lost history, no platform logic, no prediction of relationship evolution |
-| Scalability | 10 | Firestore horizontal scaling, stateless agents, multi-region ready, trajectory predictor runs as async background task |
-| Deployment Readiness | 5 | Cloud Run + Firebase, production-grade architecture |
+| Google Technology Integration | 15 | Vertex AI embeddings + Gemini 2.5 Flash function calling + Gemini 2.5 Flash streaming + Firestore + Cloud Run + Firebase Auth + Firebase Hosting — full Google stack, each justified |
+| AI Implementation Quality | 10 | Multi-agent architecture, explainable decisions, human confirmation gate, post-mortem learning, trajectory prediction with confidence indicators, self-reflection bias detection, structured JSON outputs for hallucination mitigation |
+| Working Demo & UI/UX | 10 | Live reasoning log, trajectory chips on linkages table, pre-seeded data, replay mode fallback, hosted URL on Cloud Run, Google Sign-In |
+| AI Model Performance | 5 | History-aware scoring, embedding cosine similarity, performance-weighted match ranking, mid-engagement trajectory forecasting |
+| Originality & Creativity | 10 | Multi-agent negotiation + predictive trajectory + cross-cohort evolution forecasting — unique combination in this problem space |
+| Problem-Solution Fit | 15 | Every pain point in Cradle's problem statement maps directly to a specific system feature |
+| Scalability | 10 | Firestore horizontal scaling, stateless agents, multi-region ready, async background tasks |
+| Deployment Readiness | 5 | Cloud Run + Firebase Hosting + Firebase Auth — production-grade full Google stack |
 | **Total** | **80** | **Target: 74–79 / 80** |

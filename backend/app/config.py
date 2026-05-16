@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     google_application_credentials: str = "/app/service-account.json"
     
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash"
     gemini_max_tokens: int = 2048
     
     vertex_embedding_model: str = "text-embedding-004"
@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     enable_replay_mode: bool = True
     enable_trajectory_predictor: bool = True
     enable_evolution_engine: bool = True
+    min_cloud_run_instances: int = 1
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

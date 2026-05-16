@@ -16,7 +16,7 @@ This document outlines the atomic, sequentially ordered backend tasks required t
 
 ### Phase 3: Core AI Infrastructure
 - [x] **Task 3.1**: Implement the Vertex AI embeddings service wrapper (`text-embedding-004`).
-- [x] **Task 3.2**: Implement the Gemini 2.0 Flash client wrapper to handle function calling and enforce structured JSON schemas.
+- [x] **Task 3.2**: Implement the Gemini 2.5 Flash client wrapper (`google-genai` SDK) to handle structured JSON responses using Pydantic schemas.
 - [x] **Task 3.3**: Create base prompt templates and centralized schemas for all agent inputs/outputs.
 
 ### Phase 4: Backend AI Agents Development
@@ -44,5 +44,5 @@ This document outlines the atomic, sequentially ordered backend tasks required t
 - [x] **Task 6.3**: Connect the OrchestratorAgent matching process to the SSE dispatcher to broadcast internal logs in real-time.
 
 ### Phase 7: Deployment Configuration
-- [ ] **Task 7.1**: Write the `Dockerfile` and `.dockerignore` for the FastAPI application.
-- [ ] **Task 7.2**: Prepare Cloud Build / Google Cloud Run deployment commands (`gcloud run deploy`) with appropriate minimum instance counts.
+- [x] **Task 7.1**: Write the `Dockerfile` and `.dockerignore` for the FastAPI application.
+- [x] **Task 7.2**: Prepare Cloud Build / Google Cloud Run deployment commands (`gcloud run deploy`) with appropriate minimum instance counts.

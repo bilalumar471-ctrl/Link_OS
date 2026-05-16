@@ -1,5 +1,5 @@
 """
-Pydantic schemas used specifically for Agent structured outputs (F1, F10, F11, F12).
+Pydantic schemas used specifically for Agent structured outputs (F1, F9, F10, F11, F12).
 """
 
 from typing import List, Literal, Optional
@@ -54,3 +54,13 @@ class EvolutionForecastResponse(BaseModel):
     mismatch_predicted_at_cohort: Optional[int] = Field(None, description="Cohort number where score drops below 60")
     forecast_reason: str
     recommended_action: str
+
+
+# ───────────────────────────────────────────
+# Self-Reflection Engine Output (F9)
+# ───────────────────────────────────────────
+class SelfReflectionResponse(BaseModel):
+    prediction_accuracy: float = Field(..., description="Fraction of predictions that were accurate (0.0 to 1.0)")
+    bias_observations: List[str] = Field(..., description="List of observed systematic biases in matching")
+    weight_adjustments: dict[str, float] = Field(..., description="Recommended weight adjustments for future matching, keyed by domain/stage")
+    reflection_summary: str = Field(..., description="Natural language summary of the reflection findings")

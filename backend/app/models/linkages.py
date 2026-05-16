@@ -68,7 +68,7 @@ class Linkage(BaseModel):
     type: Literal["mentor_company", "company_programme", "partner_initiative"] = "mentor_company"
     entity_a: EntitySnapshot
     entity_b: EntitySnapshot
-    status: Literal["proposed", "active", "completed", "dropped"] = "proposed"
+    status: Literal["proposed", "active", "completed", "dropped", "reassigned"] = "proposed"
     fit_score: int = 0
     reasoning: str = ""
     risk_flags: List[str] = Field(default_factory=list)
