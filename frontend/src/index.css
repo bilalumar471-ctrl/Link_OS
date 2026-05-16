@@ -1,0 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* ── New Palette: Coastal Command ─────────────────────────────── */
+  --color-midnight:    #152740;   /* Midnight Tide  – background   */
+  --color-harbor:      #134C65;   /* Harbor Blue    – secondary    */
+  --color-seafoam:     #487F86;   /* Seafoam Steel  – primary      */
+  --color-beige:       #F0ECDA;   /* Driftwood Beige– text/light   */
+
+  /* Derived surfaces */
+  --color-surface:     #0E1E2F;   /* darker card bg */
+  --color-surface-2:   #162D42;   /* card hover     */
+  --color-border:      rgba(72,127,134,0.22);
+
+  /* Status semantic (kept intentional — distinct from palette) */
+  --color-stable:      #6BA8AE;   /* light seafoam  */
+  --color-at-risk:     #2A7A8C;   /* mid harbor     */
+  --color-critical:    #F0ECDA;   /* beige contrast */
+
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  @keyframes glow {
+    0%   { box-shadow: 0 0 10px rgba(72,127,134,0.15), 0 0 20px rgba(72,127,134,0.07); }
+    100% { box-shadow: 0 0 24px rgba(72,127,134,0.5),  0 0 60px rgba(72,127,134,0.2); }
+  }
+
+  @keyframes float {
+    0%   { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(20px, -20px) scale(1.04); }
+  }
+
+  @keyframes scanline {
+    from { top: -5%; }
+    to   { top: 105%; }
+  }
+
+  @keyframes gradient {
+    0%   { background-position: 0% center; }
+    100% { background-position: 200% center; }
+  }
+}
+
+/* ── Typography ─────────────────────────────────────────────────── */
+:root {
+  --font-heading: "Inter", system-ui, -apple-system, sans-serif;
+  --font-body:    Tahoma, "Trebuchet MS", "Segoe UI", Verdana, Geneva, sans-serif;
+  --font-mono:    "Fira Code", "Cascadia Code", "Courier New", monospace;
+}
+
+body {
+  background-color: #0E1E2F;
+  color: #F0ECDA;
+  margin: 0;
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
+code, pre, kbd          { font-family: var(--font-mono); }
+
+/* ── Glow utilities ─────────────────────────────────────────────── */
+@utility text-glow-seafoam {
+  text-shadow: 0 0 16px rgba(72,127,134,0.7), 0 0 32px rgba(72,127,134,0.3);
+}
+
+@utility text-glow-harbor {
+  text-shadow: 0 0 16px rgba(19,76,101,0.8), 0 0 32px rgba(19,76,101,0.4);
+}
+
+@utility text-glow-beige {
+  text-shadow: 0 0 16px rgba(240,236,218,0.5), 0 0 32px rgba(240,236,218,0.2);
+}
+
+@utility font-heading { font-family: var(--font-heading); }
+@utility font-body    { font-family: var(--font-body); }
+
+@utility glass-panel {
+  background: rgba(14, 30, 47, 0.80);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(72, 127, 134, 0.18);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}

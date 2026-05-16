@@ -15,8 +15,14 @@ class Settings(BaseSettings):
     firestore_database: str = "(default)"
     
     api_base_url: str = "http://localhost:8000"
-    frontend_url: str = "http://localhost:3000"
-    cors_origins: List[str] = ["http://localhost:3000"]
+    frontend_url: str = "http://localhost:5175"
+    cors_origins: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176",
+    ]
     
     enable_self_reflection: bool = True
     enable_risk_agent: bool = True
