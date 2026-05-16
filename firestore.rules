@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // For the hackathon MVP, we are allowing read access to everyone 
+    // so the React frontend can use real-time listeners without requiring full Firebase Auth.
+    // However, write access is completely blocked from the frontend.
+    // Only the FastAPI backend (via Firebase Admin SDK) is allowed to write data.
+    
+    match /{document=**} {
+      allow read: if true;
+      allow write: if false; 
+    }
+  }
+}
