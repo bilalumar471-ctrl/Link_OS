@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, AlertCircle, Plus, X, Loader2, User, Building2, LayoutGrid } from 'lucide-react';
 import { createMentor, createCompany, createProgramme } from '../lib/api';
+import { getUser, hasRole } from '../lib/auth';
 
 // ── Palette ────────────────────────────────────────────────────────
 const ORANGE = '#FF6A00';
@@ -313,15 +314,24 @@ const SubmitBtn = ({ loading, onClick, label }) => (
 
 // ── Tabs config ────────────────────────────────────────────────────
 const TABS = [
-  { id: 'mentor',    label: 'Mentor',    Icon: User,        Form: MentorForm,    desc: 'Register an expert who will mentor companies in the programme.' },
-  { id: 'company',  label: 'Company',   Icon: Building2,   Form: CompanyForm,   desc: 'Add a startup or company seeking mentorship and support.' },
-  { id: 'programme',label: 'Programme', Icon: LayoutGrid,  Form: ProgrammeForm, desc: 'Create a programme — this is required before running a match.' },
+  { id: 'mentor',    label: 'Mentor',    Icon: User,        Form: MentorForm,    desc: 'Register an expert who will mentor companies in the programme.', roles: ['super_admin', 'programme_admin', 'mentor'] },
+  { id: 'company',  label: 'Company',   Icon: Building2,   Form: CompanyForm,   desc: 'Add a startup or company seeking mentorship and support.', roles: ['super_admin', 'programme_admin', 'company'] },
+  { id: 'programme',label: 'Programme', Icon: LayoutGrid,  Form: ProgrammeForm, desc: 'Create a programme — this is required before running a match.', roles: ['super_admin', 'programme_admin'] },
 ];
 
 // ── Register Page ──────────────────────────────────────────────────
 const Register = () => {
-  const [active, setActive] = useState('mentor');
-  const tab = TABS.find(t => t.id === active);
+  const user = getUser();
+  const isAdmin = hasRole('super_admin', 'programme_admin');
+
+  // Filter tabs based on role
+  const visibleTabs = TABS.filter(t => {
+    if (t.roles) return t.roles.includes(user?.role);
+    return true;
+  });
+
+  const [active, setActive] = useState(visibleTabs[0]?.id || 'company');
+  const tab = visibleTabs.find(t => t.id === active) || visibleTabs[0];
 
   return (
     <div className="min-h-screen pt-24 px-6 md:px-12 pb-24">
@@ -347,7 +357,7 @@ const Register = () => {
 
         {/* Tabs */}
         <div className="flex gap-0 mb-8" style={{ borderBottom: `1px solid rgba(72,127,134,0.25)` }}>
-          {TABS.map(({ id, label, Icon }) => {
+          {visibleTabs.map(({ id, label, Icon }) => {
             const isActive = active === id;
             return (
               <button

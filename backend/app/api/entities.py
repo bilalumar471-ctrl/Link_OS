@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Optional
 import json
 
 from app.services import dal
 from app.services.vertex_ai import get_embedding
+from app.core.auth import verify_token, require_roles, check_owner_or_admin
 from app.models.entities import (
     MentorCreate, MentorUpdate,
     CompanyCreate, CompanyUpdate,
@@ -30,17 +31,17 @@ async def _get_single(entity_type: str, entity_id: str):
 # Mentors
 # ───────────────────────────────────────────
 @router.get("/mentors")
-async def get_mentors():
+async def get_mentors(_user: dict = Depends(verify_token)):
     return await dal.list_entities("mentors")
 
 
 @router.get("/mentors/{mentor_id}")
-async def get_mentor(mentor_id: str):
+async def get_mentor(mentor_id: str, _user: dict = Depends(verify_token)):
     return await _get_single("mentors", mentor_id)
 
 
 @router.post("/mentors")
-async def create_mentor(mentor: MentorCreate):
+async def create_mentor(mentor: MentorCreate, _user: dict = Depends(require_roles("super_admin", "programme_admin"))):
     profile_text = json.dumps(mentor.profile.model_dump())
     embedding = await get_embedding(profile_text)
 
@@ -55,7 +56,8 @@ async def create_mentor(mentor: MentorCreate):
 
 
 @router.put("/mentors/{mentor_id}")
-async def update_mentor(mentor_id: str, update: MentorUpdate):
+async def update_mentor(mentor_id: str, update: MentorUpdate, _user: dict = Depends(verify_token)):
+    check_owner_or_admin(_user, mentor_id)
     existing = await dal.get_entity("mentors", mentor_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Mentor not found")
@@ -76,17 +78,17 @@ async def update_mentor(mentor_id: str, update: MentorUpdate):
 # Companies
 # ───────────────────────────────────────────
 @router.get("/companies")
-async def get_companies():
+async def get_companies(_user: dict = Depends(verify_token)):
     return await dal.list_entities("companies")
 
 
 @router.get("/companies/{company_id}")
-async def get_company(company_id: str):
+async def get_company(company_id: str, _user: dict = Depends(verify_token)):
     return await _get_single("companies", company_id)
 
 
 @router.post("/companies")
-async def create_company(company: CompanyCreate):
+async def create_company(company: CompanyCreate, _user: dict = Depends(require_roles("super_admin", "programme_admin"))):
     profile_text = json.dumps(company.profile.model_dump())
     embedding = await get_embedding(profile_text)
 
@@ -101,7 +103,8 @@ async def create_company(company: CompanyCreate):
 
 
 @router.put("/companies/{company_id}")
-async def update_company(company_id: str, update: CompanyUpdate):
+async def update_company(company_id: str, update: CompanyUpdate, _user: dict = Depends(verify_token)):
+    check_owner_or_admin(_user, company_id)
     existing = await dal.get_entity("companies", company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -121,17 +124,17 @@ async def update_company(company_id: str, update: CompanyUpdate):
 # Programmes
 # ───────────────────────────────────────────
 @router.get("/programmes")
-async def get_programmes():
+async def get_programmes(_user: dict = Depends(verify_token)):
     return await dal.list_entities("programmes")
 
 
 @router.get("/programmes/{programme_id}")
-async def get_programme(programme_id: str):
+async def get_programme(programme_id: str, _user: dict = Depends(verify_token)):
     return await _get_single("programmes", programme_id)
 
 
 @router.post("/programmes")
-async def create_programme(prog: ProgrammeCreate):
+async def create_programme(prog: ProgrammeCreate, _user: dict = Depends(require_roles("super_admin", "programme_admin"))):
     data = {
         "profile": prog.profile.model_dump(),
         "active_linkages": [],
@@ -142,7 +145,7 @@ async def create_programme(prog: ProgrammeCreate):
 
 
 @router.put("/programmes/{programme_id}")
-async def update_programme(programme_id: str, update: ProgrammeUpdate):
+async def update_programme(programme_id: str, update: ProgrammeUpdate, _user: dict = Depends(require_roles("super_admin", "programme_admin"))):
     existing = await dal.get_entity("programmes", programme_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Programme not found")
@@ -161,17 +164,17 @@ async def update_programme(programme_id: str, update: ProgrammeUpdate):
 # Partners
 # ───────────────────────────────────────────
 @router.get("/partners")
-async def get_partners():
+async def get_partners(_user: dict = Depends(verify_token)):
     return await dal.list_entities("partners")
 
 
 @router.get("/partners/{partner_id}")
-async def get_partner(partner_id: str):
+async def get_partner(partner_id: str, _user: dict = Depends(verify_token)):
     return await _get_single("partners", partner_id)
 
 
 @router.post("/partners")
-async def create_partner(partner: PartnerCreate):
+async def create_partner(partner: PartnerCreate, _user: dict = Depends(require_roles("super_admin", "programme_admin"))):
     profile_text = json.dumps(partner.profile.model_dump())
     embedding = await get_embedding(profile_text)
 
@@ -186,7 +189,7 @@ async def create_partner(partner: PartnerCreate):
 
 
 @router.put("/partners/{partner_id}")
-async def update_partner(partner_id: str, update: PartnerUpdate):
+async def update_partner(partner_id: str, update: PartnerUpdate, _user: dict = Depends(require_roles("super_admin", "programme_admin"))):
     existing = await dal.get_entity("partners", partner_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Partner not found")

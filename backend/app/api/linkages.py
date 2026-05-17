@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query, Depends
 from typing import Optional
+
+from app.core.auth import verify_token, require_roles
 
 from app.services import dal
 from app.models.linkages import SessionLogCreate
@@ -20,6 +22,7 @@ async def get_linkages(
     status: Optional[str] = Query(None),
     type: Optional[str] = Query(None),
     trajectory: Optional[str] = Query(None, description="Filter by trajectory status: improving | stable | declining | critical"),
+    _user: dict = Depends(verify_token),
 ):
     """Fetch linkages with optional filtering by status, type, and trajectory."""
     filters = {}
@@ -35,7 +38,7 @@ async def get_linkages(
 
 
 @router.get("/suggestions")
-async def get_reuse_suggestions(programme_id: str = Query(...)):
+async def get_reuse_suggestions(programme_id: str = Query(...), _user: dict = Depends(verify_token)):
     """
     F8 — Cross-Programme Relationship Reuse.
     Queries completed linkages with high fit scores that overlap 
@@ -67,7 +70,7 @@ async def get_reuse_suggestions(programme_id: str = Query(...)):
 
 
 @router.post("/{linkage_id}/confirm")
-async def confirm_linkage(linkage_id: str):
+async def confirm_linkage(linkage_id: str, _user: dict = Depends(require_roles("super_admin", "programme_admin"))):
     """Moves a proposed linkage to active state."""
     linkage = await dal.get_linkage(linkage_id)
     if not linkage:
@@ -78,7 +81,7 @@ async def confirm_linkage(linkage_id: str):
 
 
 @router.post("/{linkage_id}/close")
-async def close_linkage(linkage_id: str, background_tasks: BackgroundTasks, outcome: str = "completed", final_rating: float = 5.0):
+async def close_linkage(linkage_id: str, background_tasks: BackgroundTasks, outcome: str = "completed", final_rating: float = 5.0, _user: dict = Depends(require_roles("super_admin", "programme_admin"))):
     """
     Closes a linkage. 
     Post-mortem triggers on: dropped, reassigned, or completed with rating < 3.
@@ -105,7 +108,7 @@ async def close_linkage(linkage_id: str, background_tasks: BackgroundTasks, outc
 
 
 @router.post("/{linkage_id}/log-session")
-async def log_session(linkage_id: str, session: SessionLogCreate, background_tasks: BackgroundTasks):
+async def log_session(linkage_id: str, session: SessionLogCreate, background_tasks: BackgroundTasks, _user: dict = Depends(require_roles("super_admin", "programme_admin"))):
     """
     Logs a session and triggers the Trajectory Predictor in the background.
     """
@@ -118,10 +121,24 @@ async def log_session(linkage_id: str, session: SessionLogCreate, background_tas
 
 
 @router.get("/{linkage_id}/trajectory")
-async def get_trajectory(linkage_id: str):
+async def get_trajectory(linkage_id: str, _user: dict = Depends(verify_token)):
     """Fetches the latest trajectory prediction."""
     linkage = await dal.get_linkage(linkage_id)
     if not linkage:
         raise HTTPException(status_code=404, detail="Linkage not found")
         
     return linkage.get("trajectory", {})
+
+@router.get("/{linkage_id}/sessions")
+async def get_linkage_sessions(linkage_id: str, _user: dict = Depends(verify_token)):
+    """Fetches all session logs for a given linkage."""
+    return await dal.get_sessions(linkage_id)
+
+@router.post("/{linkage_id}/flag")
+async def flag_linkage(linkage_id: str, _user: dict = Depends(verify_token)):
+    """Sets manually_flagged to true for the given linkage."""
+    linkage = await dal.get_linkage(linkage_id)
+    if not linkage:
+        raise HTTPException(status_code=404, detail="Linkage not found")
+    await dal.update_linkage(linkage_id, {"manually_flagged": True})
+    return {"status": "flagged"}

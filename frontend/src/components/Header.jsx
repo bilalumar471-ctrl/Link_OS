@@ -1,17 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { NavLink } from 'react-router-dom';
-import { Cpu, Zap } from 'lucide-react';
+import { Cpu, Zap, LogOut, User } from 'lucide-react';
+import { getUser, logout, hasRole } from '../lib/auth';
 
 const NAV = [
   { label: 'Overview',  to: '/' },
   { label: 'Dashboard', to: '/dashboard' },
-  { label: 'Matching',  to: '/matching' },
+  { label: 'Matching',  to: '/matching',  adminOnly: true },
   { label: 'Register',  to: '/register' },
+  { label: 'Users',     to: '/users',     superAdminOnly: true },
 ];
 
 const Header = () => {
   const [time, setTime] = useState(new Date());
+  const user = getUser();
+  const isAdmin = hasRole('super_admin', 'programme_admin');
+  const isSuperAdmin = hasRole('super_admin');
+  
+  const visibleNav = NAV.filter(n => {
+    if (n.superAdminOnly) return isSuperAdmin;
+    if (n.adminOnly) return isAdmin;
+    return true;
+  });
+
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
@@ -46,7 +58,7 @@ const Header = () => {
 
       {/* Nav */}
       <nav className="flex-1 flex justify-center items-center gap-8">
-        {NAV.map(({ label, to }, i) => (
+        {visibleNav.map(({ label, to }, i) => (
           <motion.div
             key={to}
             initial={{ opacity: 0, y: -10 }}
@@ -87,6 +99,20 @@ const Header = () => {
         <span className="text-[10px] font-mono tracking-widest hidden sm:block" style={{ color: 'rgba(240,236,218,0.35)' }}>
           {time.toLocaleTimeString('en-US', { hour12: false })}
         </span>
+
+        {/* User info */}
+        {user && (
+          <div className="flex items-center gap-2 px-2.5 py-1" style={{ border: '1px solid rgba(255,215,0,0.25)', background: 'rgba(255,215,0,0.05)' }}>
+            <User className="w-3 h-3" style={{ color: '#FFD700' }} />
+            <span className="text-[10px] font-mono tracking-wider" style={{ color: '#FFD700' }}>
+              {user.name || user.username}
+            </span>
+            <span className="text-[8px] font-mono px-1 py-0.5" style={{ color: '#487F86', border: '1px solid rgba(72,127,134,0.35)' }}>
+              {user.role?.replace('_', ' ').toUpperCase()}
+            </span>
+          </div>
+        )}
+
         <div
           className="flex items-center gap-2 px-3 py-1"
           style={{ border: '1px solid rgba(72,127,134,0.30)', background: 'rgba(72,127,134,0.07)' }}
@@ -99,6 +125,16 @@ const Header = () => {
             transition={{ duration: 0.9, repeat: Infinity, ease: 'steps(1)' }}
           />
         </div>
+
+        {/* Logout */}
+        <button
+          onClick={logout}
+          className="p-1.5 transition-colors hover:bg-[rgba(255,77,196,0.10)]"
+          style={{ border: '1px solid rgba(255,77,196,0.25)' }}
+          title="Logout"
+        >
+          <LogOut className="w-3.5 h-3.5" style={{ color: '#FF4DC4' }} />
+        </button>
       </div>
     </header>
   );

@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
@@ -31,6 +32,14 @@ class Settings(BaseSettings):
     enable_evolution_engine: bool = True
     min_cloud_run_instances: int = 1
 
+    # JWT Auth
+    jwt_secret_key: str = "fallback-secret-key"
+    jwt_algorithm: str = "HS256"
+    jwt_expiry_hours: int = 12
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 settings = Settings()
+
+if settings.google_application_credentials and os.path.isfile(settings.google_application_credentials):
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.google_application_credentials

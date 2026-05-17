@@ -1,6 +1,8 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Activity, AlertTriangle, TrendingDown, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Activity, AlertTriangle, TrendingDown, CheckCircle2, X, Plus, Calendar, Check, Clock, Star } from 'lucide-react';
+import { getLinkages, getSessions, flagLinkage } from '../lib/api';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 
 const SF = '#487F86';   // Seafoam Steel
 const HB = '#134C65';   // Harbor Blue
@@ -17,38 +19,370 @@ const PulseDot = ({ color }) => (
 );
 
 // ── Status row ────────────────────────────────────────────────────
-const StatusRow = ({ name, status, trend, confidence, dotColor }) => (
-  <div
-    className="group flex items-center justify-between p-4 border-b transition-all duration-300 relative overflow-hidden"
-    style={{ borderColor: 'rgba(72,127,134,0.12)', background: 'rgba(72,127,134,0.02)' }}
-  >
+const StatusRow = ({ name, status, trend, confidence, dotColor, onClick }) => {
+  const isAtRisk = trend === 'warning' || trend === 'critical';
+  
+  return (
     <div
-      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-      style={{ background: 'rgba(72,127,134,0.04)' }}
-    />
-    <div className="flex items-center gap-4 relative z-10">
-      <PulseDot color={dotColor} />
-      <div>
-        <h4 className="text-[14px] tracking-wide" style={{ color: BG }}>{name}</h4>
-        <span className="text-[11px] font-mono tracking-wider" style={{ color: 'rgba(72,127,134,0.7)' }}>{status}</span>
+      onClick={onClick}
+      className="group flex items-center justify-between p-4 border-b transition-all duration-300 relative overflow-hidden cursor-pointer hover:bg-white/5"
+      style={{ 
+        borderColor: 'rgba(72,127,134,0.12)', 
+        background: isAtRisk ? 'rgba(239, 68, 68, 0.04)' : 'rgba(72,127,134,0.02)',
+        borderLeft: isAtRisk ? '2px solid #EF4444' : 'none'
+      }}
+    >
+      <div
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+        style={{ background: 'rgba(72,127,134,0.04)' }}
+      />
+      <div className="flex items-center gap-4 relative z-10">
+        <PulseDot color={dotColor} />
+        <div>
+          <h4 className="text-[14px] tracking-wide" style={{ color: BG }}>{name}</h4>
+          <span className="text-[11px] font-mono tracking-wider" style={{ color: 'rgba(72,127,134,0.7)' }}>{status}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-8 relative z-10">
+        <div className="text-right hidden sm:block">
+          <span className="block text-[9px] uppercase font-bold tracking-widest" style={{ color: 'rgba(72,127,134,0.55)' }}>Drop Probability</span>
+          <span className="text-[13px] font-mono" style={{ color: BG }}>{confidence}</span>
+        </div>
+        <div className="w-28 text-right font-mono text-[13px] font-bold">
+          {trend === 'improving' && <span className="inline-flex items-center gap-1.5" style={{ color: SF }}><CheckCircle2 className="w-3 h-3"/> → STABLE</span>}
+          {trend === 'warning'   && <span className="inline-flex items-center gap-1.5" style={{ color: '#EF4444' }}><AlertTriangle className="w-3 h-3"/> ↓ AT RISK</span>}
+          {trend === 'critical'  && <span className="inline-flex items-center gap-1.5" style={{ color: '#EF4444' }}><TrendingDown className="w-3 h-3"/> ↓ CRITICAL</span>}
+        </div>
       </div>
     </div>
-    <div className="flex items-center gap-8 relative z-10">
-      <div className="text-right hidden sm:block">
-        <span className="block text-[9px] uppercase font-bold tracking-widest" style={{ color: 'rgba(72,127,134,0.55)' }}>Confidence</span>
-        <span className="text-[13px] font-mono" style={{ color: BG }}>{confidence}</span>
+  );
+};
+
+// ── Error Boundary ──────────────────────────────────────────────────
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ position: 'fixed', top: 0, right: 0, width: 420, height: '100%', background: 'red', color: 'white', padding: 20, zIndex: 9999 }}>
+          <h1>Something went wrong.</h1>
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.error?.toString()}</pre>
+          <button onClick={() => this.props.onClose()} style={{ marginTop: 20, padding: 10, background: 'white', color: 'red' }}>Close</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ── Detail Panel ──────────────────────────────────────────────────
+const DetailPanel = ({ linkage, onClose }) => {
+  const [sessions, setSessions] = useState([]);
+  const [flagged, setFlagged] = useState(linkage.manually_flagged || false);
+
+  useEffect(() => {
+    getSessions(linkage.id).then(setSessions).catch(console.error);
+  }, [linkage.id]);
+
+  const handleFlag = async () => {
+    if (flagged) return;
+    try {
+      await flagLinkage(linkage.id);
+      setFlagged(true);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const mName = linkage.entity_a?.snapshot?.name || 'Unknown Mentor';
+  const cName = linkage.entity_b?.snapshot?.name || 'Unknown Company';
+  const pName = linkage.programme_id || 'Unknown Programme';
+  const tStatus = linkage.trajectory?.status || 'stable';
+  const isStable = tStatus === 'improving' || tStatus === 'stable';
+  const isAtRisk = !isStable;
+
+  const dropProbRaw = linkage.trajectory?.drop_probability;
+  let dropProbVal = 0;
+  if (dropProbRaw !== undefined) {
+    dropProbVal = Math.round(dropProbRaw * 100);
+  } else {
+    if (tStatus === 'critical') dropProbVal = 85;
+    else if (tStatus === 'warning' || tStatus === 'declining') dropProbVal = 70;
+    else dropProbVal = 12;
+  }
+
+  const safeSessions = Array.isArray(sessions) ? sessions : [];
+
+  const chartData = safeSessions.map((s, i) => ({
+    name: `S${i + 1}`,
+    rating: s.rating || 0,
+    responseTime: s.response_time_hours || 0
+  }));
+
+  const avgRating = safeSessions.length ? (safeSessions.reduce((a, b) => a + (b.rating || 0), 0) / safeSessions.length).toFixed(1) : '0.0';
+  const avgResponse = safeSessions.length ? (safeSessions.reduce((a, b) => a + (b.response_time_hours || 0), 0) / safeSessions.length).toFixed(1) : '0.0';
+
+  return (
+    <motion.div
+      initial={{ x: 420 }}
+      animate={{ x: 0 }}
+      exit={{ x: 420 }}
+      transition={{ type: 'tween', ease: 'easeOut', duration: 0.25 }}
+      style={{
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: 420,
+        background: '#0F1A2E',
+        borderLeft: '1px solid rgba(32,178,170,0.2)',
+        zIndex: 50,
+        display: 'flex',
+        flexDirection: 'column'
+      }}
+    >
+      {/* HEADER */}
+      <div style={{ padding: 16, borderBottom: '1px solid rgba(32,178,170,0.1)' }}>
+        <button onClick={onClose} style={{ float: 'right', color: '#8899B0' }}>
+          <X className="w-5 h-5" />
+        </button>
+        <h2 style={{ fontSize: 18, fontWeight: 'bold', color: '#E8EDF5' }}>{cName} ↔ {mName}</h2>
+        <p style={{ fontSize: 10, color: '#8899B0', textTransform: 'uppercase', marginTop: 4 }}>
+          ENGAGEMENT-{(linkage.id || 'NEW').slice(0,4)} · {pName}
+        </p>
       </div>
-      <div className="w-28 text-right font-mono text-[13px] font-bold">
-        {trend === 'improving' && <span className="inline-flex items-center gap-1.5" style={{ color: SF }}><CheckCircle2 className="w-3 h-3"/> STABLE</span>}
-        {trend === 'warning'   && <span className="inline-flex items-center gap-1.5" style={{ color: '#2A7A8C' }}><AlertTriangle className="w-3 h-3"/> AT RISK</span>}
-        {trend === 'critical'  && <span className="inline-flex items-center gap-1.5" style={{ color: BG }}><TrendingDown className="w-3 h-3"/> CRITICAL</span>}
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {/* TRAJECTORY PREDICTION BLOCK */}
+        <div style={{
+          background: isAtRisk ? 'rgba(239,68,68,0.06)' : 'rgba(32,178,170,0.06)',
+          borderLeft: `3px solid ${isAtRisk ? '#EF4444' : '#20B2AA'}`,
+          borderRadius: 8,
+          padding: 16,
+          marginBottom: 12
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+            <span style={{ fontSize: 10, color: '#C4A882', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              🔮 Trajectory Prediction
+            </span>
+            <span style={{ fontSize: 9, padding: '2px 6px', background: '#20B2AA', color: '#fff', borderRadius: 99, fontWeight: 'bold' }}>
+              AI LIVE
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: '#8899B0' }}>Status</span>
+            <span style={{ fontSize: 12, color: isAtRisk ? '#EF4444' : '#20B2AA', fontWeight: 'bold' }}>
+              {isAtRisk ? '↓ DECLINING' : '→ STABLE'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: '#8899B0' }}>Predicted outcome</span>
+            <span style={{ fontSize: 12, color: isAtRisk ? '#EF4444' : '#20B2AA' }}>
+              {linkage.trajectory?.predicted_outcome?.toUpperCase() || (isAtRisk ? 'DROP' : 'COMPLETED')}
+            </span>
+          </div>
+          
+          <div style={{ marginTop: 16, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: '#8899B0' }}>Drop probability</span>
+              <span style={{ fontSize: 20, fontWeight: 'bold', color: '#EF4444' }}>{dropProbVal}%</span>
+            </div>
+            <div style={{ width: '100%', height: 6, background: 'rgba(239,68,68,0.2)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${dropProbVal}%`, height: '100%', background: '#EF4444' }} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: '#8899B0' }}>Predicted drop</span>
+            <span style={{ fontSize: 12, color: '#F59E0B' }}>Week {linkage.trajectory?.predicted_drop_week || '6'}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+            <span style={{ fontSize: 12, color: '#8899B0' }}>Confidence</span>
+            <span style={{ fontSize: 12, color: '#20B2AA' }}>
+              {typeof linkage.trajectory?.confidence === 'number' 
+                ? `${Math.round(linkage.trajectory.confidence * 100)}%` 
+                : (linkage.trajectory?.confidence || 'HIGH').toString().toUpperCase()}
+            </span>
+          </div>
+
+          <div style={{ 
+            borderLeft: '2px solid rgba(32,178,170,0.5)', 
+            paddingLeft: 12, 
+            fontSize: 12, 
+            color: '#8899B0', 
+            fontStyle: 'italic', 
+            lineHeight: 1.6 
+          }}>
+            "{linkage.trajectory?.trajectory_reason || 'No reasoning available'}"
+          </div>
+
+          <div style={{
+            background: 'rgba(245,158,11,0.08)',
+            borderLeft: '2px solid #F59E0B',
+            borderRadius: 6,
+            padding: '10px 12px',
+            marginTop: 12
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 10, color: '#C4A882', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                ⚡ Recommended Action
+              </span>
+              <span style={{ 
+                fontSize: 9, 
+                padding: '2px 6px', 
+                background: linkage.trajectory?.action_urgency === 'immediate' ? '#EF4444' : linkage.trajectory?.action_urgency === 'this_week' ? '#F59E0B' : '#64748B',
+                color: '#fff', 
+                borderRadius: 99, 
+                fontWeight: 'bold' 
+              }}>
+                {(typeof linkage.trajectory?.action_urgency === 'string' ? linkage.trajectory.action_urgency : 'MONITOR').replace('_', ' ').toUpperCase()}
+              </span>
+            </div>
+            <p style={{ fontSize: 12, color: '#E8EDF5' }}>{linkage.trajectory?.recommended_action || 'Continue monitoring the engagement.'}</p>
+          </div>
+        </div>
+
+        {/* SESSION TREND BLOCK */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 10, color: '#C4A882', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
+            Session Trend
+          </div>
+          <div style={{ height: 100, width: '100%', marginBottom: 8 }}>
+            {safeSessions.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <Line type="monotone" dataKey="rating" stroke={isAtRisk ? '#EF4444' : '#20B2AA'} strokeWidth={2} dot={{ r: 4, fill: isAtRisk ? '#EF4444' : '#20B2AA' }} isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8899B0', fontSize: 12 }}>
+                Not enough data
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#8899B0' }}>AVG RATING</span>
+            <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#E8EDF5' }}>{avgRating} stars</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#8899B0' }}>AVG RESPONSE TIME</span>
+            <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#E8EDF5' }}>{avgResponse} hours</span>
+          </div>
+        </div>
+
+        <div style={{ borderBottom: '1px solid rgba(32,178,170,0.1)', marginBottom: 24 }} />
+
+        {/* SESSION LOG BLOCK */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 10, color: '#C4A882', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
+            Session Log
+          </div>
+          {safeSessions.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: '#8899B0' }}>
+              <Calendar className="w-5 h-5 mx-auto mb-2 opacity-50" />
+              <p style={{ fontSize: 12 }}>No sessions logged yet</p>
+            </div>
+          ) : (
+            safeSessions.map((s, i) => (
+              <div key={s.id || i} style={{
+                background: 'rgba(32,178,170,0.04)',
+                border: '1px solid rgba(32,178,170,0.1)',
+                borderRadius: 6,
+                padding: '8px 10px',
+                marginBottom: 6,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 'bold', fontFamily: 'monospace', color: '#20B2AA' }}>S{s.session_number || i + 1}</span>
+                <span style={{ fontSize: 11, color: '#8899B0', flex: 1 }}>{s.logged_at ? new Date(s.logged_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'Unknown'}</span>
+                {s.rating >= 3 ? <Check className="w-3 h-3 text-[#22C55E]" /> : <X className="w-3 h-3 text-[#EF4444]" />}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Star className="w-3 h-3 text-[#E8EDF5]" />
+                  <span style={{ fontSize: 11, color: '#E8EDF5' }}>{s.rating?.toFixed(1) || '0.0'}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Clock className="w-3 h-3 text-[#8899B0]" />
+                  <span style={{ fontSize: 11, color: '#8899B0' }}>{s.response_time_hours || 0}h</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
-    </div>
-  </div>
-);
+
+      {/* ACTION BUTTONS */}
+      <div style={{ padding: 16, borderTop: '1px solid rgba(32,178,170,0.1)' }}>
+        <button 
+          onClick={() => alert("Open Session Modal")}
+          style={{ width: '100%', background: '#20B2AA', color: '#fff', fontSize: 12, fontWeight: 'bold', padding: '10px 0', borderRadius: 6, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+        >
+          <Plus className="w-4 h-4" />
+          LOG NEW SESSION
+        </button>
+        <button 
+          onClick={handleFlag}
+          style={{ 
+            width: '100%', 
+            background: flagged ? '#EF4444' : 'transparent', 
+            border: `1px solid #EF4444`, 
+            color: flagged ? '#fff' : '#EF4444', 
+            fontSize: 12, 
+            fontWeight: 'bold', 
+            padding: '10px 0', 
+            borderRadius: 6, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: 6,
+            transition: 'all 0.2s'
+          }}
+        >
+          {flagged ? <Check className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+          {flagged ? 'FLAGGED' : 'FLAG FOR REVIEW'}
+        </button>
+      </div>
+    </motion.div>
+  );
+};
 
 // ── Main component ────────────────────────────────────────────────
-const TrajectoryPredictor = () => (
+const TrajectoryPredictor = () => {
+  const [linkages, setLinkages] = useState([]);
+  const [selectedLinkage, setSelectedLinkage] = useState(null);
+
+  useEffect(() => {
+    getLinkages({ status: 'active' })
+      .then(data => setLinkages(data || []))
+      .catch(console.error);
+  }, []);
+
+  const avgConfidence = linkages.length > 0 
+    ? Math.round(linkages.reduce((sum, l) => sum + (l.fit_score || 0), 0) / linkages.length)
+    : 0;
+  
+  const atRiskCount = linkages.filter(l => 
+    l.trajectory?.status === 'declining' || l.trajectory?.status === 'critical'
+  ).length;
+
+  const nextAlert = atRiskCount > 0 ? '~2 hrs' : 'None';
+
+  const displayLinkages = [...linkages].sort((a, b) => {
+    const riskScore = (l) => l.trajectory?.status === 'critical' ? 2 : l.trajectory?.status === 'declining' ? 1 : 0;
+    return riskScore(b) - riskScore(a);
+  }).slice(0, 3);
+
+  return (
   <section className="py-20 px-6 md:px-12 lg:px-20 relative z-10 overflow-hidden">
     <div className="max-w-[1280px] mx-auto flex flex-col lg:flex-row gap-20 items-center">
 
@@ -96,10 +430,43 @@ const TrajectoryPredictor = () => (
             </div>
 
             {/* Rows */}
-            <div className="space-y-0 relative z-10">
-              <StatusRow name="TechVenture MY ↔ Priya Nair" status="ENGAGEMENT-A42" trend="improving" confidence="92%" dotColor={SF} />
-              <StatusRow name="DataCo KL ↔ Lim Wei"         status="ENGAGEMENT-B17" trend="critical"  confidence="78%" dotColor={BG} />
-              <StatusRow name="FinTech Hub ↔ Azri Hassan"   status="ENGAGEMENT-C09" trend="warning"   confidence="64%" dotColor="#2A7A8C" />
+            <div className="space-y-0 relative z-10 min-h-[160px]">
+              {displayLinkages.length === 0 ? (
+                <div className="p-4 mt-8 text-[#F0ECDA]/50 text-sm font-mono text-center">No active linkages to track.</div>
+              ) : (
+                displayLinkages.map((l, i) => {
+                  const mName = l.entity_a?.snapshot?.name || 'Unknown Mentor';
+                  const cName = l.entity_b?.snapshot?.name || 'Unknown Company';
+                  const tStatus = l.trajectory?.status || 'stable';
+                  
+                  let trend = 'improving';
+                  let dotColor = SF;
+                  if (tStatus === 'declining') { trend = 'warning'; dotColor = '#2A7A8C'; }
+                  if (tStatus === 'critical') { trend = 'critical'; dotColor = BG; }
+
+                  const dropProbRaw = l.trajectory?.drop_probability;
+                  let dropProbVal = 0;
+                  if (dropProbRaw !== undefined) {
+                    dropProbVal = Math.round(dropProbRaw * 100);
+                  } else {
+                    if (trend === 'critical') dropProbVal = 85;
+                    else if (trend === 'warning') dropProbVal = 70;
+                    else dropProbVal = 12;
+                  }
+
+                  return (
+                    <StatusRow 
+                      key={l.id || i}
+                      name={`${cName} ↔ ${mName}`}
+                      status={`ENGAGEMENT-${l.id?.slice(0,4).toUpperCase() || 'NEW'}`}
+                      trend={trend}
+                      confidence={`${dropProbVal}%`}
+                      dotColor={dotColor}
+                      onClick={() => setSelectedLinkage(l)}
+                    />
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -203,9 +570,9 @@ const TrajectoryPredictor = () => (
           {/* 3 stat columns */}
           <div className="grid grid-cols-3 gap-6">
             {[
-              { label: 'Avg Confidence', value: '78%',    sub: 'across linkages' },
-              { label: 'At-Risk Count',  value: '2',      sub: 'need attention'  },
-              { label: 'Next Alert',     value: '~4 hrs', sub: 'estimated'       },
+              { label: 'Avg Confidence', value: `${avgConfidence}%`,    sub: 'across linkages' },
+              { label: 'At-Risk Count',  value: atRiskCount.toString(),      sub: 'need attention'  },
+              { label: 'Next Alert',     value: nextAlert, sub: 'estimated'       },
             ].map(({ label, value, sub }) => (
               <div key={label} className="flex flex-col">
                 <span className="text-[24px] font-mono font-bold tabular-nums leading-none mb-1" style={{ color: '#00CED1' }}>
@@ -228,18 +595,31 @@ const TrajectoryPredictor = () => (
                 className="h-full rounded-full"
                 style={{ background: 'linear-gradient(90deg, #00CED1, #7FFFD4)' }}
                 initial={{ width: '0%' }}
-                whileInView={{ width: '78%' }}
+                whileInView={{ width: `${avgConfidence}%` }}
                 viewport={{ once: true }}
                 transition={{ duration: 1.4, delay: 0.8, ease: 'easeOut' }}
               />
             </div>
-            <span className="text-[9px] font-mono" style={{ color: 'rgba(0,206,209,0.55)' }}>78% system health</span>
+            <span className="text-[9px] font-mono" style={{ color: 'rgba(0,206,209,0.55)' }}>{avgConfidence}% system health</span>
           </div>
         </motion.div>
 
       </motion.div>
     </div>
+
+    <AnimatePresence>
+      {selectedLinkage && (
+        <ErrorBoundary onClose={() => setSelectedLinkage(null)}>
+          <DetailPanel 
+            key={selectedLinkage.id} 
+            linkage={selectedLinkage} 
+            onClose={() => setSelectedLinkage(null)} 
+          />
+        </ErrorBoundary>
+      )}
+    </AnimatePresence>
   </section>
-);
+  );
+};
 
 export default TrajectoryPredictor;

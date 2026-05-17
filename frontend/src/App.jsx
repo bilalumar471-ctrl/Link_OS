@@ -1,10 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Header from './components/Header';
+import ProtectedRoute from './components/ProtectedRoute';
 import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
 import Matching from './pages/Matching';
 import Register from './pages/Register';
+import LoginPage from './pages/LoginPage';
+import UnauthorisedPage from './pages/UnauthorisedPage';
+import UsersPage from './pages/UsersPage';
+import { isAuthenticated } from './lib/auth';
 
 // ── Coastal background (no video — video lives in HeroSection only) ───────
 const Background = () => (
@@ -53,6 +58,9 @@ const Background = () => (
 
 const AppLayout = () => {
   const cursorRef = useRef(null);
+  const location = useLocation();
+  const isLoginRoute = location.pathname === '/login';
+  const authed = isAuthenticated();
 
   useEffect(() => {
     const move = (e) => {
@@ -80,20 +88,65 @@ const AppLayout = () => {
       />
 
       <div className="relative z-20">
-        <Header />
+        {/* Only show header when authenticated and not on login/unauthorised */}
+        {authed && !isLoginRoute && <Header />}
+
         <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/unauthorised" element={<UnauthorisedPage />} />
+
+          {/* Protected routes */}
           <Route
             path="/"
             element={
-              <div className="relative w-full pt-14">
-                <Landing />
-              </div>
+              <ProtectedRoute>
+                <div className="relative w-full pt-14">
+                  <Landing />
+                </div>
+              </ProtectedRoute>
             }
           />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/matching"  element={<Matching />} />
-          <Route path="/register"  element={<Register />} />
-          <Route path="*"          element={<Dashboard />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/matching"
+            element={
+              <ProtectedRoute roles={['super_admin', 'programme_admin']}>
+                <Matching />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <ProtectedRoute>
+                <Register />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/users"
+            element={
+              <ProtectedRoute roles={['super_admin']}>
+                <UsersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </div>
     </div>

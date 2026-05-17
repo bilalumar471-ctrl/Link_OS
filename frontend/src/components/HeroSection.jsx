@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Zap, Loader2 } from 'lucide-react';
-import { runMatch, getProgrammes } from '../lib/api';
+import { runMatch, getProgrammes, getStats } from '../lib/api';
 
 const ORANGE = '#FF6A00';
 const GOLDEN = '#FFD700';
@@ -76,6 +76,11 @@ const HeroSection = () => {
   const navigate = useNavigate();
   const [launching,   setLaunching]   = useState(false);
   const [swarmStatus, setSwarmStatus] = useState(null);
+  const [stats, setStats]             = useState({ active_linkages: 0, agents_online: 0, match_accuracy: 0 });
+
+  useEffect(() => {
+    getStats().then(setStats).catch(console.error);
+  }, []);
 
   const typewriterText = useTypewriter(
     ['Programmable.', 'Automated.', 'Self-Improving.', 'Scalable.'],
@@ -200,9 +205,9 @@ const HeroSection = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.8 }}
         >
-          <Counter target={12024} label="Active Linkages" numColor="#FF2020" labelColor="#FF6060" />
-          <Counter target={47}    label="Agents Online"   numColor="#00E676" labelColor="#66BB6A" />
-          <Counter target={94}    label="Match Accuracy"  suffix="%" numColor="#FFFFFF" labelColor="rgba(255,255,255,0.55)" />
+          <Counter target={stats.active_linkages} label="Active Linkages" numColor="#FF2020" labelColor="#FF6060" />
+          <Counter target={stats.agents_online}    label="Agents Online"   numColor="#00E676" labelColor="#66BB6A" />
+          <Counter target={stats.match_accuracy}    label="Match Accuracy"  suffix="%" numColor="#FFFFFF" labelColor="rgba(255,255,255,0.55)" />
         </motion.div>
 
         {/* CTA */}

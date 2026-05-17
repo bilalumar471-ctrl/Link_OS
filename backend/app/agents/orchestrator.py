@@ -34,8 +34,9 @@ class OrchestratorAgent:
         
         # 3. Create semantic embedding of the criteria (company needs + programme focus)
         criteria_text = json.dumps({
-            "company_needs": company_profile.get("needs", []),
-            "programme_focus": programme.get("profile", {}).get("criteria", {})
+            "company_challenges": company_profile.get("challenges", []),
+            "company_goals": company_profile.get("goals", []),
+            "programme_focus": programme.get("description", "")
         })
         criteria_embedding = await vertex_ai.get_embedding(criteria_text)
         

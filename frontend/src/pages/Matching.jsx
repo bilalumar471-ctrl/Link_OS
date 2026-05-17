@@ -58,20 +58,23 @@ const Matching = () => {
     setError(null);
 
     try {
-      // 1. Trigger the match agent
-      const matchRes = await runMatch({ programme_id: programmeId.trim() });
-      setResult(matchRes);
-
-      // 2. Start SSE stream for reasoning logs
+      // 1. Start SSE stream for reasoning logs BEFORE triggering the match
       setStreaming(true);
       stopStream.current = streamReasoning(
         (line) => setLogs(prev => [...prev, line]),
         () => setStreaming(false),
       );
+
+      // 2. Trigger the match agent
+      const matchRes = await runMatch({ programme_id: programmeId.trim() });
+      setResult(matchRes);
     } catch (e) {
       setError(e.message);
     } finally {
       setRunning(false);
+      setTimeout(() => {
+        handleStop();
+      }, 1000);
     }
   };
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, CheckCircle2, AlertTriangle, TrendingDown, RefreshCw, Filter } from 'lucide-react';
 import { getLinkages, confirmLinkage, closeLinkage } from '../lib/api';
+import { hasRole } from '../lib/auth';
 
 // ── Status badge ──────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
@@ -43,7 +44,7 @@ const ScoreBar = ({ score = 0 }) => {
 };
 
 // ── Linkage row ───────────────────────────────────────────────────
-const LinkageRow = ({ linkage, onConfirm, onClose, index }) => {
+const LinkageRow = ({ linkage, onConfirm, onClose, index, showActions }) => {
   const [loading, setLoading] = useState(false);
   const mentorName  = linkage.entity_a?.snapshot?.name || linkage.entity_a?.id || '—';
   const companyName = linkage.entity_b?.snapshot?.name || linkage.entity_b?.id || '—';
@@ -83,6 +84,7 @@ const LinkageRow = ({ linkage, onConfirm, onClose, index }) => {
         {linkage.trajectory?.status || '—'}
       </td>
       <td className="py-4 px-4">
+        {showActions && (
         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
           {linkage.status === 'proposed' && (
             <button
@@ -103,6 +105,7 @@ const LinkageRow = ({ linkage, onConfirm, onClose, index }) => {
             </button>
           )}
         </div>
+        )}
       </td>
     </motion.tr>
   );
@@ -115,11 +118,12 @@ const Dashboard = () => {
   const [error, setError]           = useState(null);
   const [filter, setFilter]         = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const isAdmin = hasRole('super_admin', 'programme_admin');
 
   const load = async () => {
     setLoading(true); setError(null);
     try {
-      const data = await getLinkages(filter ? { status: filter } : {});
+      const data = await getLinkages({});
       setLinkages(Array.isArray(data) ? data : []);
     } catch (e) {
       setError(e.message);
@@ -128,7 +132,7 @@ const Dashboard = () => {
     }
   };
 
-  useEffect(() => { load(); }, [filter, refreshKey]);
+  useEffect(() => { load(); }, [refreshKey]);
 
   const handleConfirm = async (id) => {
     await confirmLinkage(id);
@@ -140,6 +144,7 @@ const Dashboard = () => {
   };
 
   const FILTERS = ['', 'proposed', 'active', 'completed', 'dropped'];
+  
   const stats = {
     total:     linkages.length,
     active:    linkages.filter(l => l.status === 'active').length,
@@ -148,6 +153,8 @@ const Dashboard = () => {
       ? Math.round(linkages.reduce((s, l) => s + (l.fit_score || 0), 0) / linkages.length)
       : 0,
   };
+
+  const filteredLinkages = filter ? linkages.filter(l => l.status === filter) : linkages;
 
   return (
     <div className="min-h-screen pt-20 px-6 md:px-12 pb-20">
@@ -231,7 +238,7 @@ const Dashboard = () => {
                         ))}
                       </tr>
                     ))
-                  : linkages.length === 0
+                  : filteredLinkages.length === 0
                     ? (
                       <tr>
                         <td colSpan={6} className="py-16 text-center text-[#7EAFC4] text-sm">
@@ -239,13 +246,14 @@ const Dashboard = () => {
                         </td>
                       </tr>
                     )
-                    : linkages.map((l, i) => (
+                    : filteredLinkages.map((l, i) => (
                       <LinkageRow
                         key={l.id}
                         index={i}
                         linkage={l}
                         onConfirm={handleConfirm}
                         onClose={handleClose}
+                        showActions={isAdmin}
                       />
                     ))
                 }
